@@ -2,10 +2,11 @@
 
 **Live app:** https://tpal481.github.io/my-travels/ (installable PWA — open on your phone and use *Add to Home screen*).
 
-## Cities & travel history (v19–v21)
+## Cities & travel history (v19–v22)
 
 - **Cities**: visited cities show as small red dots with bold English labels (labels that would collide hide at low zoom and appear as you zoom in). Tap a pin to see / remove it. Cities are listed under their country in the count-pill list, and counted in stats.
-- Add cities from the search box — a small bundled list (~100 cities with coordinates, `CITY_DB` in `js/app.js`). Adding a city also marks its country (and US/AU/IN state or UAE emirate) visited. Stored in `localStorage` under `mytravels.v1` → `cities`.
+- Add cities from the search box — **worldwide**: ~64k places (GeoNames `cities5000`, population ≥ 5,000, minus neighbourhoods) in `data/cities-5000.txt` (~2.4 MB, ~1.1 MB gzipped), lazy-loaded the first time the search box is used and cached by the service worker. Results rank by match quality, then population, and show "City, Region, Country". English/former names (Bombay, Bangalore, Allahabad, Gurgaon, Madras, Calcutta, Peking…) come from GeoNames English alternate names plus a curated list. Rebuild with `python3 tools/build_cities.py /path/to/geonames` (needs cities5000.txt, admin1CodesASCII.txt, countryInfo.txt, optional alternateNamesV2.txt). City data © GeoNames, CC BY 4.0.
+- The small bundled list (`CITY_DB` in `js/app.js`) is used before the gazetteer loads and for the seeds; its ids (`houston-us`, …) are kept in the data file so saved cities stay matched. GeoNames cities are stored as `gn-<base36 geonameid>`. Adding a city also marks its country (and US/AU/IN state or UAE emirate) visited. Stored in `localStorage` under `mytravels.v1` → `cities`.
 - **Travel-history seed**: on first load the app merges the user's known visits (9 countries, US-TX, AU-NSW/VIC/ACT, AE-DU, 12 cities) into existing data without removing anything, then sets `mytravels.seed.2026-10-08` so it never runs again.
 - **India seed** (separate flag `mytravels.seed.2026-10-08-india`, so it also applies where the first seed already ran): India + 14 states/UTs (IN-DL, AS, ML, TN, KA, RJ, UP, HR, WB, OR, CH, UT, HP, GA) + 22 cities. City search also matches aliases (Bengaluru/Bangalore, Prayagraj/Allahabad, Gurugram/Gurgaon, Delhi/New Delhi…).
 - City labels never overlap each other, other city dots, or country labels at any zoom; a city label may hide an Indian state / emirate label it would otherwise collide with.

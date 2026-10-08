@@ -21,7 +21,7 @@
   // localized OSM labels) off the map; visited places are labeled by the app in English.
   const TILE_URL =
     "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
-  console.log("MyTravels v21 macau label + tiny-territory markers");
+  console.log("MyTravels v22 worldwide city search (GeoNames)");
   const TILE_ATTR =
     'Tiles &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, (c) <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, and the GIS user community';
   const REVERSE_URL =
@@ -89,6 +89,9 @@
   const SMALL_TERRITORY_LABEL_SIDES = { HKG: "right", MAC: "left", SGP: "center" };
   // Visited places whose polygon renders smaller than this (px) get a gold dot.
   const TINY_PLACE_MIN_PX = 8;
+  // Worldwide city gazetteer (GeoNames cities5000, CC BY 4.0), lazy-loaded the
+  // first time the search box is used. Built by tools/build_cities.py.
+  const CITY_DATA_URL = "./data/cities-5000.txt";
 
   // —— Cities ——
   // Small bundled gazetteer for city search / pins:
@@ -106,7 +109,7 @@
     ["san-francisco-us", "San Francisco", "USA", "US-CA", 37.7749, -122.4194],
     ["san-diego-us", "San Diego", "USA", "US-CA", 32.7157, -117.1611],
     ["chicago-us", "Chicago", "USA", "US-IL", 41.8781, -87.6298],
-    ["washington-dc-us", "Washington, D.C.", "USA", "US-DC", 38.9072, -77.0369],
+    ["washington-dc-us", "Washington, D.C.", "USA", "US-DC", 38.9072, -77.0369, ["Washington"]],
     ["boston-us", "Boston", "USA", "US-MA", 42.3601, -71.0589],
     ["seattle-us", "Seattle", "USA", "US-WA", 47.6062, -122.3321],
     ["las-vegas-us", "Las Vegas", "USA", "US-NV", 36.1699, -115.1398],
@@ -145,7 +148,7 @@
     ["bangkok-th", "Bangkok", "THA", null, 13.7563, 100.5018],
     ["chiang-mai-th", "Chiang Mai", "THA", null, 18.7883, 98.9853],
     ["pattaya-th", "Pattaya", "THA", null, 12.9236, 100.8825],
-    ["koh-samui-th", "Koh Samui", "THA", null, 9.512, 100.0136],
+    ["koh-samui-th", "Koh Samui", "THA", null, 9.512, 100.0136, ["Ko Samui"]],
     // United Arab Emirates
     ["dubai-ae", "Dubai", "ARE", "AE-DU", 25.2048, 55.2708],
     ["abu-dhabi-ae", "Abu Dhabi", "ARE", "AE-AZ", 24.4539, 54.3773],
@@ -176,7 +179,7 @@
     ["rishikesh-in", "Rishikesh", "IND", "IN-UT", 30.0869, 78.2676],
     ["haridwar-in", "Haridwar", "IND", "IN-UT", 29.9457, 78.1642],
     ["chamba-in", "Chamba", "IND", "IN-HP", 32.5534, 76.1258],
-    ["panaji-in", "Panaji", "IND", "IN-GA", 15.4909, 73.8278],
+    ["panaji-in", "Panaji", "IND", "IN-GA", 15.4909, 73.8278, ["Panjim"]],
     ["kochi-in", "Kochi", "IND", "IN-KL", 9.9312, 76.2673],
     // Rest of Asia / Middle East
     ["tokyo-jp", "Tokyo", "JPN", null, 35.6762, 139.6503],
@@ -729,15 +732,18 @@
   }
 
   function cityRecord(c, source, now) {
-    return {
+    const rec = {
       name: c.name,
-      country: c.country,
+      country: c.country || null,
       admin: c.admin || null,
       lat: c.lat,
       lng: c.lng,
       addedAt: now,
       source,
     };
+    if (c.region) rec.region = c.region;
+    if (c.countryName) rec.countryName = c.countryName;
+    return rec;
   }
 
   /**
@@ -1036,8 +1042,17 @@
   }
 
   /** "Texas, United States" / "United Kingdom" */
+  function cityRegionName(v) {
+    return placeNameForId(v.admin) || v.region || "";
+  }
+
+  function cityCountryName(v) {
+    return placeNameForId(v.country) || v.countryName || "";
+  }
+
   function cityContextLabel(v) {
-    return [placeNameForId(v.admin), placeNameForId(v.country)]
+    const region = cityRegionName(v);
+    return [region && region !== v.name ? region : "", cityCountryName(v)]
       .filter(Boolean)
       .join(", ");
   }
@@ -1241,29 +1256,183 @@
     showToast(`Removed ${v.name}`);
   }
 
-  function searchCities(q) {
-    const out = [];
-    for (const c of CITY_INDEX.values()) {
-      let best = null;
-      for (const term of [c.name, ...(c.aliases || [])]) {
-        const n = term.toLowerCase();
-        if (!n.includes(q)) continue;
-        const score = n === q ? 100 : n.startsWith(q) ? 78 : 35 - Math.min(n.indexOf(q), 20);
-        if (!best || score > best.score) best = { score, term };
+  // —— Worldwide city gazetteer ——
+  /** @type {null | { n: number, names: string[], keys: string[], alts: (string[]|null)[], altKeys: (string[]|null)[], ctx: Int32Array, lat: Float64Array, lng: Float64Array, pop: Float64Array, ids: string[], contexts: any[] }} */
+  let cityData = null;
+  /** @type {Promise<void>|null} */
+  let cityDataPromise = null;
+  let cityDataLoadMs = 0;
+
+  function searchKey(value) {
+    const lower = String(value).toLowerCase();
+    return /[^\x00-\x7f]/.test(lower)
+      ? lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      : lower;
+  }
+
+  function parseCityData(text) {
+    const lines = text.split("\n");
+    const contexts = JSON.parse(lines[0]);
+    const n = lines.length;
+    const names = [];
+    const keys = [];
+    const alts = [];
+    const altKeys = [];
+    const ids = [];
+    const ctx = new Int32Array(n);
+    const lat = new Float64Array(n);
+    const lng = new Float64Array(n);
+    const pop = new Float64Array(n);
+    let cur = 0;
+    let i = 0;
+    for (let li = 1; li < n; li++) {
+      const line = lines[li];
+      if (!line) continue;
+      if (line.charCodeAt(0) === 64 /* @ */) {
+        cur = Number(line.slice(1));
+        continue;
       }
-      if (!best) continue;
+      const f = line.split("\t");
+      names.push(f[0]);
+      keys.push(searchKey(f[0]));
+      if (f[1]) {
+        const a = f[1].split("|");
+        alts.push(a);
+        altKeys.push(a.map(searchKey));
+      } else {
+        alts.push(null);
+        altKeys.push(null);
+      }
+      ctx[i] = cur;
+      lat[i] = Number(f[2]);
+      lng[i] = Number(f[3]);
+      pop[i] = Number(f[4]) * 100;
+      // Legacy bundled ids (contain "-") stay as-is; GeoNames ids get a prefix.
+      ids.push(f[5].includes("-") ? f[5] : `gn-${f[5]}`);
+      i++;
+    }
+    return { n: i, names, keys, alts, altKeys, ctx, lat, lng, pop, ids, contexts };
+  }
+
+  function ensureCityData() {
+    if (cityDataPromise) return cityDataPromise;
+    const t0 = performance.now();
+    cityDataPromise = fetch(CITY_DATA_URL)
+      .then((res) => {
+        if (!res.ok) throw new Error("cities HTTP " + res.status);
+        return res.text();
+      })
+      .then((text) => {
+        cityData = parseCityData(text);
+        cityDataLoadMs = Math.round(performance.now() - t0);
+        console.info("MyTravels: city data", cityData.n, "places in", cityDataLoadMs, "ms");
+        // Refresh suggestions typed while the list was loading.
+        if (el.search.value.trim() && document.activeElement === el.search) {
+          renderAutocomplete(searchPlaces(el.search.value));
+        }
+      })
+      .catch((err) => {
+        console.warn("City data failed to load; using the bundled city list", err);
+        cityDataPromise = null;
+      });
+    return cityDataPromise;
+  }
+
+  function cityFromData(i) {
+    const d = cityData;
+    const c = d.contexts[d.ctx[i]] || [];
+    return {
+      id: d.ids[i],
+      name: d.names[i],
+      country: c[1] || null,
+      countryName: c[2] || "",
+      region: c[3] || "",
+      admin: c[4] || null,
+      lat: d.lat[i],
+      lng: d.lng[i],
+      pop: d.pop[i],
+    };
+  }
+
+  /** Match quality for one key: exact 100, prefix 80, word start 60, substring 30. */
+  function matchScore(k, q) {
+    const at = k.indexOf(q);
+    if (at < 0) return 0;
+    if (at === 0) return k.length === q.length ? 100 : 80;
+    const prev = k.charCodeAt(at - 1);
+    if (prev === 32 || prev === 45 || prev === 39) return 60; // space - '
+    return q.length >= 3 ? 30 - Math.min(at, 10) : 0;
+  }
+
+  function searchCities(rawQuery, limit = 8) {
+    const q = searchKey(rawQuery.trim());
+    if (!q) return [];
+    const out = [];
+    if (cityData) {
+      const d = cityData;
+      let cand = [];
+      for (let i = 0; i < d.n; i++) {
+        let score = matchScore(d.keys[i], q);
+        let alias = null;
+        const ak = d.altKeys[i];
+        if (ak && score < 100) {
+          for (let j = 0; j < ak.length; j++) {
+            const s2 = matchScore(ak[j], q) - 5;
+            if (s2 > score) {
+              score = s2;
+              alias = d.alts[i][j];
+            }
+          }
+        }
+        if (score <= 0) continue;
+        cand.push({ i, score, alias, pop: d.pop[i] });
+        if (cand.length > 600) {
+          cand.sort((a, b) => b.score - a.score || b.pop - a.pop);
+          cand = cand.slice(0, limit * 4);
+        }
+      }
+      cand.sort((a, b) => b.score - a.score || b.pop - a.pop);
+      for (const c of cand.slice(0, limit)) {
+        const city = cityFromData(c.i);
+        out.push({
+          id: city.id,
+          name: city.name,
+          kind: "city",
+          score: c.score,
+          pop: city.pop,
+          matchedAlias: c.alias,
+          visited: !!store.cities[city.id],
+          city,
+        });
+      }
+      return out;
+    }
+    // Before the gazetteer arrives: the small bundled list.
+    for (const c of CITY_INDEX.values()) {
+      let best = 0;
+      let alias = null;
+      for (const term of [c.name, ...(c.aliases || [])]) {
+        const sc = matchScore(searchKey(term), q) - (term === c.name ? 0 : 5);
+        if (sc > best) {
+          best = sc;
+          alias = term === c.name ? null : term;
+        }
+      }
+      if (best <= 0) continue;
       out.push({
         id: c.id,
         name: c.name,
         kind: "city",
-        score: best.score,
-        matchedAlias: best.term !== c.name ? best.term : null,
+        score: best,
+        pop: 0,
+        matchedAlias: alias,
         visited: !!store.cities[c.id],
         city: c,
       });
     }
-    return out;
+    return out.sort((a, b) => b.score - a.score).slice(0, limit);
   }
+
 
   function findFeatureByName(query, { preferKind } = {}) {
     const q = query.trim().toLowerCase();
@@ -1329,12 +1498,15 @@
         }
       }
     }
-    for (const item of searchCities(q)) best.set(`city:${item.id}`, item);
+    for (const item of searchCities(query, limit)) best.set(`city:${item.id}`, item);
+    // Match quality first; on ties countries/states beat cities, then population.
+    const kindRank = { country: 0, state: 1, city: 2 };
     return [...best.values()]
       .sort(
         (a, b) =>
           b.score - a.score ||
-          a.kind.localeCompare(b.kind) ||
+          (kindRank[a.kind] ?? 3) - (kindRank[b.kind] ?? 3) ||
+          (b.pop || 0) - (a.pop || 0) ||
           a.name.localeCompare(b.name)
       )
       .slice(0, limit);
@@ -2481,7 +2653,7 @@
       listedCityIds.add(cityId);
       const li = document.createElement("li");
       li.className = "visited-city";
-      const context = placeNameForId(c.admin) || "";
+      const context = cityRegionName(c);
       li.innerHTML = `<span class="name"><span class="city-bullet" aria-hidden="true"></span>${escapeHtml(
         c.name
       )} <span class="tag">City</span></span><span class="date">${escapeHtml(context)}</span>`;
@@ -2591,9 +2763,9 @@
         kindTag = `<span class="tag">${escapeHtml(stateRegionLabel(item.id))}</span>`;
       } else if (item.kind === "city") {
         kindTag = '<span class="tag">City</span>';
-        const country = placeNameForId(item.city.country);
         const shown = item.matchedAlias ? `${item.name} (${item.matchedAlias})` : item.name;
-        label = country ? `${shown}, ${country}` : shown;
+        const context = cityContextLabel(item.city);
+        label = context ? `${shown}, ${context}` : shown;
       }
       const visitedTag = item.visited ? '<span class="tag">Visited</span>' : "";
       li.innerHTML = `<span>${escapeHtml(label)}</span><span class="tags">${kindTag}${visitedTag}</span>`;
@@ -3031,6 +3203,7 @@
 
     el.search.addEventListener("input", () => {
       const q = el.search.value;
+      if (q) ensureCityData();
       el.searchClear.hidden = !q;
       if (q && toastIfPlacesNotReady()) {
         el.autocomplete.hidden = true;
@@ -3039,6 +3212,7 @@
       renderAutocomplete(searchPlaces(q));
     });
     el.search.addEventListener("focus", () => {
+      ensureCityData();
       if (el.search.value) {
         if (toastIfPlacesNotReady()) return;
         renderAutocomplete(searchPlaces(el.search.value));
@@ -3195,9 +3369,9 @@
     let reloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       // A single reload lets the newly activated worker serve the fresh shell.
-      if (reloading || sessionStorage.getItem("mytravels.sw-reloaded-pages-v4")) return;
+      if (reloading || sessionStorage.getItem("mytravels.sw-reloaded-pages-v5")) return;
       reloading = true;
-      sessionStorage.setItem("mytravels.sw-reloaded-pages-v4", "1");
+      sessionStorage.setItem("mytravels.sw-reloaded-pages-v5", "1");
       window.location.reload();
     });
 
