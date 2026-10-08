@@ -1,0 +1,105 @@
+# My Travels
+
+**Live app:** https://tpal481.github.io/my-travels/ (installable PWA — open on your phone and use *Add to Home screen*).
+
+## Admin regions (v18)
+
+- **Gold** highlight: visited countries, US states, and Australian states/territories.
+- **Canary yellow** (`#FFF44F`): visited Indian states/UTs and UAE emirates.
+- Indian state name labels appear when India is in view (zoom ≥ ~4.25).
+- UAE emirate labels appear when the UAE is in view (zoom ≥ ~6).
+- Menu → **Export Indian states** downloads visited Indian states only (JSON or CSV: id, name, year).
+- Fresh phone path: `/v18/`.
+
+Mobile-first Progressive Web App that highlights countries you’ve visited on an interactive world map. Built for a Samsung Android phone (portrait), installable to the home screen.
+
+## Features
+
+- Full-screen light travel map (Leaflet + unlabeled Esri Light Gray tiles)
+- Country polygons from Natural Earth (GeoJSON); visited places fill in gold
+- **US states** (50 + DC), **Indian states/UTs** (36), and **Australian states/territories** (8) from Natural Earth admin-1; ids like `US-CA` / `IN-DL` / `AU-NSW` stored alongside countries
+- **Empty start** — add countries/states via search, or allow location to auto-capture
+- Geolocation + reverse geocode (BigDataCloud free client API, no key) with throttling
+- Tap a country → bottom sheet with editable visit year, first/last visit, and remove / mark visited
+- Stats: countries + US states + Indian states + Australian states counts, rough % of world, grouped list of visits
+- Export / import JSON (including editable visit years); clear all
+- PWA: web app manifest + service worker (caches the app shell)
+- Data persists in `localStorage`
+
+## Project layout
+
+```
+travel-map/
+  index.html
+  css/styles.css
+  js/app.js
+  manifest.webmanifest
+  sw.js
+  serve.sh
+  data/
+    countries.geojson
+    us-states.geojson   # Natural Earth 50m admin-1 filtered to USA
+    in-states.geojson   # Natural Earth 50m admin-1 filtered to India
+    au-states.geojson   # Natural Earth 50m admin-1 filtered to Australia
+  icons/          # plane-window app icon (PNG 48–512 + SVG)
+  README.md
+```
+
+## Run on this box
+
+Geolocation and the service worker need a real origin (not `file://`).
+
+```bash
+cd /workspace/travel-map
+./serve.sh          # default port 8080
+# or: ./serve.sh 3000
+# or: python3 -m http.server 8080 --bind 0.0.0.0
+```
+
+Open **http://127.0.0.1:8080/** in a browser on the box.
+
+## Open on a Samsung phone
+
+This app is complete locally. To use it on the phone you’ll need a **publicly reachable URL** (or a tunnel) later — hosting/tunnel is a follow-up step.
+
+When you have a URL (HTTPS preferred for install + location):
+
+1. Open Chrome on the Samsung phone → visit the URL  
+2. First-run screen → **Allow location** (or skip and add countries manually)  
+3. **Install:** Chrome menu → **Install app** / **Add to Home screen**  
+4. Launch from the home screen for a standalone fullscreen experience  
+
+Until then you can develop/test with `./serve.sh` on the box, or use the box LAN IP if the phone is on the same Wi‑Fi (`http://<lan-ip>:8080/`). Note: some browsers require HTTPS for geolocation except on `localhost`.
+
+## Location & reverse geocoding caveats
+
+- Uses the browser **Geolocation API** (permission prompt).
+- Reverse geocode: `https://api.bigdatacloud.net/data/reverse-geocode-client` (no API key).
+- Throttled: at most one reverse-geocode every **5 minutes**, or when you move ~**25 km**, plus on demand when tapping the locate button / enabling tracking.
+- Only marks a country after a confident `countryCode` + `name` result (skips ocean / empty).
+- Be respectful of the free endpoint — don’t lower the throttle for production spam.
+- The box may have no real GPS; the permission flow and code paths still work when a position is available.
+- Nominatim is not used by default (needs a proper identifying User-Agent / usage policy); BigDataCloud client endpoint is simpler for a static front-end.
+
+## Manual use without GPS
+
+Use the search box (**Add country or state…**) — autocomplete includes countries, US states (California, Texas…), Indian states/UTs (Delhi, Maharashtra…), and Australian states/territories (New South Wales, Victoria…). Tap a result to mark visited. Tap any place on the map for details / remove. The United States, India, and Australia country sheets list how many of their states/territories you’ve visited.
+
+## Data
+
+Stored under `localStorage` key `mytravels.v1`. Export a JSON backup from **Settings** before clearing.
+
+## Icons
+
+Creative **airplane window** icon (sky, horizon, coast, island) generated as PNG at 48 / 128 / 180 / 192 / 512 (and 1024 master). Wired in `manifest.webmanifest`, favicon, and apple-touch-icon. Regenerate with:
+
+```bash
+/workspace/travel-map/.venv/bin/python icons/generate_icons.py
+```
+
+## Stack
+
+- Vanilla HTML / CSS / JS (no build step)
+- [Leaflet](https://leafletjs.com/) via CDN
+- Natural Earth admin-0 countries GeoJSON
+- Esri World Light Gray basemap tiles (no API key and no third-party place labels, so visited labels remain English). Country highlights work from cached GeoJSON once loaded.

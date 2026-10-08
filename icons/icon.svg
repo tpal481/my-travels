@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5aaad8"/>
+      <stop offset="45%" stop-color="#b4d7f5"/>
+      <stop offset="55%" stop-color="#ffd296"/>
+      <stop offset="100%" stop-color="#145f7a"/>
+    </linearGradient>
+    <clipPath id="win"><rect x="110" y="70" width="292" height="372" rx="90"/></clipPath>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#161c26"/>
+  <rect x="94" y="54" width="324" height="404" rx="100" fill="#303846"/>
+  <rect x="110" y="70" width="292" height="372" rx="90" fill="#48505e"/>
+  <g clip-path="url(#win)">
+    <rect x="110" y="70" width="292" height="372" fill="url(#sky)"/>
+    <ellipse cx="360" cy="220" rx="36" ry="18" fill="#c8a56e" opacity=".9"/>
+    <path d="M110 280 Q200 250 300 290 T402 300 L402 442 L110 442Z" fill="#d2af78"/>
+    <path d="M120 320 Q220 300 310 340 T400 350 L400 442 L120 442Z" fill="#468255"/>
+    <ellipse cx="200" cy="160" rx="50" ry="22" fill="#fff" opacity=".75"/>
+    <ellipse cx="300" cy="130" rx="38" ry="16" fill="#fff" opacity=".65"/>
+  </g>
+  <rect x="8" y="8" width="496" height="496" rx="108" fill="none" stroke="#3dd6c6" stroke-width="6" opacity=".7"/>
+</svg>
