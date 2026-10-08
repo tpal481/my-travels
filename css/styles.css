@@ -387,6 +387,11 @@ html, body {
     0 0 4px rgba(255, 248, 225, 0.9);
 }
 
+/* Small territories (Hong Kong / Macau / Singapore) get fixed label sides so
+   neighbours never hide each other; offset clears the minimum-size gold dot. */
+.visited-label--side-right { transform: translate(9px, -50%); text-align: left; }
+.visited-label--side-left { transform: translate(calc(-100% - 9px), -50%); text-align: right; }
+
 .visited-label--state {
   max-width: 130px;
   font-size: 0.65rem;

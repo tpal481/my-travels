@@ -21,7 +21,7 @@
   // localized OSM labels) off the map; visited places are labeled by the app in English.
   const TILE_URL =
     "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
-  console.log("MyTravels v20 india history + city label layout");
+  console.log("MyTravels v21 macau label + tiny-territory markers");
   const TILE_ATTR =
     'Tiles &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, (c) <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, and the GIS user community';
   const REVERSE_URL =
@@ -84,6 +84,11 @@
   // Second, independent one-time merge (India) — also runs on browsers that
   // already applied the first seed.
   const SEED_INDIA_FLAG_KEY = "mytravels.seed.2026-10-08-india";
+  // Tiny visited territories: label always shown, on a fixed side so close
+  // neighbours (Hong Kong ↔ Macau) never hide each other.
+  const SMALL_TERRITORY_LABEL_SIDES = { HKG: "right", MAC: "left", SGP: "center" };
+  // Visited places whose polygon renders smaller than this (px) get a gold dot.
+  const TINY_PLACE_MIN_PX = 8;
 
   // —— Cities ——
   // Small bundled gazetteer for city search / pins:
@@ -237,7 +242,7 @@
       ["FRA", "France"],
       ["AUS", "Australia"],
       ["HKG", "Hong Kong"],
-      ["MAC", "Macao"],
+      ["MAC", "Macau"],
       ["THA", "Thailand"],
       ["SGP", "Singapore"],
       ["ARE", "United Arab Emirates"],
@@ -334,7 +339,9 @@
     "The Bahamas": "Bahamas",
     "People's Republic of China": "China",
     "Republic of the Congo": "Congo",
-    "Macau": "Macao",
+    "Macao": "Macau",
+    "Macao S.A.R": "Macau",
+    "Macao SAR": "Macau",
     "French Southern and Antarctic Lands": "French Southern Territories",
     "Australian Indian Ocean Territories": "Indian Ocean Territories",
   };
@@ -430,6 +437,9 @@
     "holy see": "Vatican",
     palestine: "Palestine",
     "state of palestine": "Palestine",
+    macao: "Macau",
+    macau: "Macau",
+    "macao sar": "Macau",
     turkey: "Turkey",
     turkiye: "Turkey",
     "türkiye": "Turkey",
@@ -579,6 +589,8 @@
   let aeEmirateLabelLayer = null;
   /** @type {L.LayerGroup|null} */
   let cityLayer = null;
+  /** @type {L.LayerGroup|null} */
+  let tinyPlaceLayer = null;
   /** @type {Map<string, L.Marker>} */
   const cityMarkers = new Map();
   /** @type {"loading"|"ready"|"failed"} */
@@ -1121,6 +1133,41 @@
     };
   }
 
+  /** Gold dot for visited places too small to see at the current zoom. */
+  function refreshTinyPlaceMarkers() {
+    if (!map || !tinyPlaceLayer) return;
+    tinyPlaceLayer.clearLayers();
+    for (const id of Object.keys(store.visited)) {
+      const layer = findPlaceLayer(id);
+      if (!layer || typeof layer.getBounds !== "function") continue;
+      let bounds;
+      try {
+        bounds = layer.getBounds();
+      } catch {
+        continue;
+      }
+      if (!bounds || !bounds.isValid() || bounds.getEast() - bounds.getWest() > 180) continue;
+      const ne = map.latLngToContainerPoint(bounds.getNorthEast());
+      const sw = map.latLngToContainerPoint(bounds.getSouthWest());
+      if (Math.max(Math.abs(ne.x - sw.x), Math.abs(ne.y - sw.y)) >= TINY_PLACE_MIN_PX) continue;
+      const canary = usesCanaryHighlight(id);
+      const dot = L.circleMarker(bounds.getCenter(), {
+        pane: "tinyPlacePane",
+        radius: 5,
+        fillColor: canary ? CANARY_FILL : GOLD_FILL,
+        fillOpacity: 0.95,
+        color: canary ? CANARY_STROKE : GOLD_STROKE,
+        weight: 1.5,
+        className: "tiny-place-dot",
+      });
+      dot.on("click", (e) => {
+        if (e.originalEvent) L.DomEvent.stopPropagation(e);
+        openPlaceSheet(id);
+      });
+      dot.addTo(tinyPlaceLayer);
+    }
+  }
+
   function refreshLayerStyles() {
     if (countryLayer) countryLayer.setStyle((f) => styleCountryFeature(f));
     if (stateLayer) stateLayer.setStyle((f) => styleStateFeature(f));
@@ -1128,6 +1175,7 @@
     refreshIndiaStateLabels();
     refreshAeEmirateLabels();
     refreshCityMarkers();
+    refreshTinyPlaceMarkers();
     updateCountUI();
   }
 
@@ -1315,6 +1363,11 @@
     }).addTo(map);
 
     map.zoomControl.setPosition("bottomleft");
+    // Minimum-size gold dots for tiny visited places sit above country/state
+    // polygons but below labels and city pins.
+    map.createPane("tinyPlacePane");
+    map.getPane("tinyPlacePane").style.zIndex = 450;
+    tinyPlaceLayer = L.layerGroup().addTo(map);
     visitLabelLayer = L.layerGroup().addTo(map);
     indiaStateLabelLayer = L.layerGroup().addTo(map);
     aeEmirateLabelLayer = L.layerGroup().addTo(map);
@@ -1328,6 +1381,7 @@
     // Registered after the label handler so city layout sees the fresh
     // country/state labels (admin-1 labels are rebuilt on every move).
     map.on("zoomend moveend", refreshCityMarkers);
+    map.on("zoomend", refreshTinyPlaceMarkers);
   }
 
   function loadScript(src) {
@@ -1951,35 +2005,47 @@
     const uaeLabelsActive = uaeRegionInView();
 
     const placedCountryBoxes = [];
+    const isSmallTerritory = (id) =>
+      Object.prototype.hasOwnProperty.call(SMALL_TERRITORY_LABEL_SIDES, id);
+    // Small territories go first (their labels are guaranteed), then larger
+    // countries, which skip any label that would collide.
     const ordered = Object.keys(store.visited)
-      .map((id) => ({ id, area: featureBoundsArea(id) }))
-      .sort((a, b) => b.area - a.area)
+      .map((id) => ({ id, area: featureBoundsArea(id), small: isSmallTerritory(id) }))
+      .sort((a, b) => b.small - a.small || b.area - a.area)
       .map((x) => x.id);
     for (const id of ordered) {
       const feature = featureById.get(id);
       if (!feature) continue;
       const kind = featureKind(feature);
-      if (kind === "country" && !showCountryLabels) continue;
+      const small = kind === "country" && isSmallTerritory(id);
+      if (kind === "country" && !showCountryLabels && !small) continue;
       if (kind === "state" && !showStateLabels) continue;
       if (kind === "state" && isInStateId(id) && indiaLabelsActive) continue;
       if (kind === "state" && isAeEmirateId(id) && uaeLabelsActive) continue;
 
       const center = visitLabelCenter(id);
       if (!center) continue;
+      const side = small ? SMALL_TERRITORY_LABEL_SIDES[id] : "center";
       if (kind === "country") {
-        // Small neighbours (Hong Kong / Macao) would otherwise print on top of
-        // each other at world zoom; the larger feature keeps its label.
+        // Overlapping country labels: the larger feature keeps its label,
+        // except small territories, which always keep theirs (fixed sides).
         const pt = map.latLngToContainerPoint(center);
         const w = Math.min(180, featureName(feature).length * 7.2 + 4);
-        const box = { x1: pt.x - w / 2, y1: pt.y - 7, x2: pt.x + w / 2, y2: pt.y + 7 };
-        if (placedCountryBoxes.some((b) => boxesOverlap(box, b))) continue;
+        const box =
+          side === "right"
+            ? { x1: pt.x + 9, y1: pt.y - 7, x2: pt.x + 9 + w, y2: pt.y + 7 }
+            : side === "left"
+              ? { x1: pt.x - 9 - w, y1: pt.y - 7, x2: pt.x - 9, y2: pt.y + 7 }
+              : { x1: pt.x - w / 2, y1: pt.y - 7, x2: pt.x + w / 2, y2: pt.y + 7 };
+        if (!small && placedCountryBoxes.some((b) => boxesOverlap(box, b))) continue;
         placedCountryBoxes.push(box);
       }
       const label = escapeHtml(featureName(feature));
+      const sideClass = side === "center" ? "" : ` visited-label--side-${side}`;
       const className =
         kind === "state"
           ? "visited-label visited-label--state"
-          : "visited-label visited-label--country";
+          : `visited-label visited-label--country${sideClass}`;
       const icon = L.divIcon({
         className: "visited-label-icon",
         html: `<span class="${className}" data-place-id="${escapeHtml(id)}">${label}</span>`,
@@ -3129,9 +3195,9 @@
     let reloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       // A single reload lets the newly activated worker serve the fresh shell.
-      if (reloading || sessionStorage.getItem("mytravels.sw-reloaded-pages-v3")) return;
+      if (reloading || sessionStorage.getItem("mytravels.sw-reloaded-pages-v4")) return;
       reloading = true;
-      sessionStorage.setItem("mytravels.sw-reloaded-pages-v3", "1");
+      sessionStorage.setItem("mytravels.sw-reloaded-pages-v4", "1");
       window.location.reload();
     });
 
@@ -3159,6 +3225,7 @@
       addCountryLayer(fc);
       countriesLoadState = "ready";
       refreshCityMarkers();
+      refreshTinyPlaceMarkers();
     } catch (err) {
       console.error(err);
       countriesLoadState = "failed";
@@ -3170,6 +3237,7 @@
       addStateLayer(sfc);
       statesLoadState = "ready";
       refreshCityMarkers();
+      refreshTinyPlaceMarkers();
     } catch (err) {
       console.warn("Admin-1 states failed to load", err);
       statesLoadState = "failed";
