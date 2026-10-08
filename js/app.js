@@ -21,7 +21,7 @@
   // localized OSM labels) off the map; visited places are labeled by the app in English.
   const TILE_URL =
     "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
-  console.log("MyTravels v18 india-uae-canary-labels");
+  console.log("MyTravels v19 cities + travel-history seed");
   const TILE_ATTR =
     'Tiles &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, (c) <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, and the GIS user community';
   const REVERSE_URL =
@@ -79,6 +79,171 @@
   ];
   // Color rule: gold = countries + US/AU states; canary = Indian states + UAE emirates.
   const TOTAL_AE_EMIRATES = 7;
+  // One-time merge of the user's travel history (old data lived on a dead origin).
+  const SEED_FLAG_KEY = "mytravels.seed.2026-10-08";
+  // Below this zoom, city labels that would collide are hidden (dots stay).
+  const CITY_LABEL_FULL_ZOOM = 7;
+
+  // —— Cities ——
+  // Small bundled gazetteer for city search / pins: [id, name, countryId, adminId|null, lat, lng].
+  // countryId / adminId match the feature ids used by the country & admin-1 layers.
+  const CITY_DB = [
+    // United States
+    ["houston-us", "Houston", "USA", "US-TX", 29.7604, -95.3698],
+    ["galveston-us", "Galveston", "USA", "US-TX", 29.3013, -94.7977],
+    ["dallas-us", "Dallas", "USA", "US-TX", 32.7767, -96.797],
+    ["austin-us", "Austin", "USA", "US-TX", 30.2672, -97.7431],
+    ["san-antonio-us", "San Antonio", "USA", "US-TX", 29.4241, -98.4936],
+    ["new-york-us", "New York", "USA", "US-NY", 40.7128, -74.006],
+    ["los-angeles-us", "Los Angeles", "USA", "US-CA", 34.0522, -118.2437],
+    ["san-francisco-us", "San Francisco", "USA", "US-CA", 37.7749, -122.4194],
+    ["san-diego-us", "San Diego", "USA", "US-CA", 32.7157, -117.1611],
+    ["chicago-us", "Chicago", "USA", "US-IL", 41.8781, -87.6298],
+    ["washington-dc-us", "Washington, D.C.", "USA", "US-DC", 38.9072, -77.0369],
+    ["boston-us", "Boston", "USA", "US-MA", 42.3601, -71.0589],
+    ["seattle-us", "Seattle", "USA", "US-WA", 47.6062, -122.3321],
+    ["las-vegas-us", "Las Vegas", "USA", "US-NV", 36.1699, -115.1398],
+    ["miami-us", "Miami", "USA", "US-FL", 25.7617, -80.1918],
+    ["orlando-us", "Orlando", "USA", "US-FL", 28.5384, -81.3789],
+    ["new-orleans-us", "New Orleans", "USA", "US-LA", 29.9511, -90.0715],
+    ["atlanta-us", "Atlanta", "USA", "US-GA", 33.749, -84.388],
+    ["honolulu-us", "Honolulu", "USA", "US-HI", 21.3069, -157.8583],
+    // United Kingdom
+    ["london-gb", "London", "GBR", null, 51.5074, -0.1278],
+    ["cambridge-gb", "Cambridge", "GBR", null, 52.2053, 0.1218],
+    ["oxford-gb", "Oxford", "GBR", null, 51.752, -1.2577],
+    ["manchester-gb", "Manchester", "GBR", null, 53.4808, -2.2426],
+    ["liverpool-gb", "Liverpool", "GBR", null, 53.4084, -2.9916],
+    ["edinburgh-gb", "Edinburgh", "GBR", null, 55.9533, -3.1883],
+    // France
+    ["paris-fr", "Paris", "FRA", null, 48.8566, 2.3522],
+    ["nice-fr", "Nice", "FRA", null, 43.7102, 7.262],
+    ["lyon-fr", "Lyon", "FRA", null, 45.764, 4.8357],
+    ["marseille-fr", "Marseille", "FRA", null, 43.2965, 5.3698],
+    // Australia
+    ["sydney-au", "Sydney", "AUS", "AU-NSW", -33.8688, 151.2093],
+    ["wollongong-au", "Wollongong", "AUS", "AU-NSW", -34.4278, 150.8931],
+    ["melbourne-au", "Melbourne", "AUS", "AU-VIC", -37.8136, 144.9631],
+    ["canberra-au", "Canberra", "AUS", "AU-ACT", -35.2809, 149.13],
+    ["brisbane-au", "Brisbane", "AUS", "AU-QLD", -27.4698, 153.0251],
+    ["gold-coast-au", "Gold Coast", "AUS", "AU-QLD", -28.0167, 153.4],
+    ["cairns-au", "Cairns", "AUS", "AU-QLD", -16.9186, 145.7781],
+    ["perth-au", "Perth", "AUS", "AU-WA", -31.9505, 115.8605],
+    ["adelaide-au", "Adelaide", "AUS", "AU-SA", -34.9285, 138.6007],
+    ["hobart-au", "Hobart", "AUS", "AU-TAS", -42.8821, 147.3272],
+    ["darwin-au", "Darwin", "AUS", "AU-NT", -12.4634, 130.8456],
+    // Thailand
+    ["phuket-th", "Phuket", "THA", null, 7.8804, 98.3923],
+    ["krabi-th", "Krabi", "THA", null, 8.0863, 98.9063],
+    ["bangkok-th", "Bangkok", "THA", null, 13.7563, 100.5018],
+    ["chiang-mai-th", "Chiang Mai", "THA", null, 18.7883, 98.9853],
+    ["pattaya-th", "Pattaya", "THA", null, 12.9236, 100.8825],
+    ["koh-samui-th", "Koh Samui", "THA", null, 9.512, 100.0136],
+    // United Arab Emirates
+    ["dubai-ae", "Dubai", "ARE", "AE-DU", 25.2048, 55.2708],
+    ["abu-dhabi-ae", "Abu Dhabi", "ARE", "AE-AZ", 24.4539, 54.3773],
+    ["sharjah-ae", "Sharjah", "ARE", "AE-SH", 25.3463, 55.4209],
+    // India
+    ["mumbai-in", "Mumbai", "IND", "IN-MH", 19.076, 72.8777],
+    ["pune-in", "Pune", "IND", "IN-MH", 18.5204, 73.8567],
+    ["new-delhi-in", "New Delhi", "IND", "IN-DL", 28.6139, 77.209],
+    ["bengaluru-in", "Bengaluru", "IND", "IN-KA", 12.9716, 77.5946],
+    ["chennai-in", "Chennai", "IND", "IN-TN", 13.0827, 80.2707],
+    ["kolkata-in", "Kolkata", "IND", "IN-WB", 22.5726, 88.3639],
+    ["hyderabad-in", "Hyderabad", "IND", "IN-TG", 17.385, 78.4867],
+    ["panaji-in", "Panaji", "IND", "IN-GA", 15.4909, 73.8278],
+    ["jaipur-in", "Jaipur", "IND", "IN-RJ", 26.9124, 75.7873],
+    ["agra-in", "Agra", "IND", "IN-UP", 27.1767, 78.0081],
+    ["kochi-in", "Kochi", "IND", "IN-KL", 9.9312, 76.2673],
+    // Rest of Asia / Middle East
+    ["tokyo-jp", "Tokyo", "JPN", null, 35.6762, 139.6503],
+    ["kyoto-jp", "Kyoto", "JPN", null, 35.0116, 135.7681],
+    ["osaka-jp", "Osaka", "JPN", null, 34.6937, 135.5023],
+    ["seoul-kr", "Seoul", "KOR", null, 37.5665, 126.978],
+    ["beijing-cn", "Beijing", "CHN", null, 39.9042, 116.4074],
+    ["shanghai-cn", "Shanghai", "CHN", null, 31.2304, 121.4737],
+    ["kuala-lumpur-my", "Kuala Lumpur", "MYS", null, 3.139, 101.6869],
+    ["denpasar-id", "Denpasar (Bali)", "IDN", null, -8.6705, 115.2126],
+    ["jakarta-id", "Jakarta", "IDN", null, -6.2088, 106.8456],
+    ["hanoi-vn", "Hanoi", "VNM", null, 21.0278, 105.8342],
+    ["ho-chi-minh-city-vn", "Ho Chi Minh City", "VNM", null, 10.8231, 106.6297],
+    ["manila-ph", "Manila", "PHL", null, 14.5995, 120.9842],
+    ["kathmandu-np", "Kathmandu", "NPL", null, 27.7172, 85.324],
+    ["colombo-lk", "Colombo", "LKA", null, 6.9271, 79.8612],
+    ["male-mv", "Malé", "MDV", null, 4.1755, 73.5093],
+    ["doha-qa", "Doha", "QAT", null, 25.2854, 51.531],
+    ["istanbul-tr", "Istanbul", "TUR", null, 41.0082, 28.9784],
+    // Europe
+    ["dublin-ie", "Dublin", "IRL", null, 53.3498, -6.2603],
+    ["amsterdam-nl", "Amsterdam", "NLD", null, 52.3676, 4.9041],
+    ["brussels-be", "Brussels", "BEL", null, 50.8503, 4.3517],
+    ["berlin-de", "Berlin", "DEU", null, 52.52, 13.405],
+    ["munich-de", "Munich", "DEU", null, 48.1351, 11.582],
+    ["zurich-ch", "Zurich", "CHE", null, 47.3769, 8.5417],
+    ["geneva-ch", "Geneva", "CHE", null, 46.2044, 6.1432],
+    ["vienna-at", "Vienna", "AUT", null, 48.2082, 16.3738],
+    ["prague-cz", "Prague", "CZE", null, 50.0755, 14.4378],
+    ["rome-it", "Rome", "ITA", null, 41.9028, 12.4964],
+    ["milan-it", "Milan", "ITA", null, 45.4642, 9.19],
+    ["venice-it", "Venice", "ITA", null, 45.4408, 12.3155],
+    ["florence-it", "Florence", "ITA", null, 43.7696, 11.2558],
+    ["barcelona-es", "Barcelona", "ESP", null, 41.3874, 2.1686],
+    ["madrid-es", "Madrid", "ESP", null, 40.4168, -3.7038],
+    ["lisbon-pt", "Lisbon", "PRT", null, 38.7223, -9.1393],
+    ["athens-gr", "Athens", "GRC", null, 37.9838, 23.7275],
+    // Americas / Africa / Oceania
+    ["toronto-ca", "Toronto", "CAN", null, 43.6532, -79.3832],
+    ["vancouver-ca", "Vancouver", "CAN", null, 49.2827, -123.1207],
+    ["mexico-city-mx", "Mexico City", "MEX", null, 19.4326, -99.1332],
+    ["cancun-mx", "Cancún", "MEX", null, 21.1619, -86.8515],
+    ["rio-de-janeiro-br", "Rio de Janeiro", "BRA", null, -22.9068, -43.1729],
+    ["buenos-aires-ar", "Buenos Aires", "ARG", null, -34.6037, -58.3816],
+    ["cairo-eg", "Cairo", "EGY", null, 30.0444, 31.2357],
+    ["cape-town-za", "Cape Town", "ZAF", null, -33.9249, 18.4241],
+    ["auckland-nz", "Auckland", "NZL", null, -36.8485, 174.7633],
+    ["queenstown-nz", "Queenstown", "NZL", null, -45.0312, 168.6626],
+  ];
+
+  const CITY_INDEX = new Map(
+    CITY_DB.map(([id, name, country, admin, lat, lng]) => [
+      id,
+      { id, name, country, admin, lat, lng },
+    ])
+  );
+
+  // Visited list supplied by the user (no years known → year left blank).
+  const SEED_VISITS = {
+    places: [
+      ["USA", "United States"],
+      ["GBR", "United Kingdom"],
+      ["FRA", "France"],
+      ["AUS", "Australia"],
+      ["HKG", "Hong Kong"],
+      ["MAC", "Macao"],
+      ["THA", "Thailand"],
+      ["SGP", "Singapore"],
+      ["ARE", "United Arab Emirates"],
+      ["US-TX", "Texas"],
+      ["AU-NSW", "New South Wales"],
+      ["AU-VIC", "Victoria"],
+      ["AU-ACT", "Australian Capital Territory"],
+      ["AE-DU", "Dubai"],
+    ],
+    cities: [
+      "houston-us",
+      "galveston-us",
+      "london-gb",
+      "cambridge-gb",
+      "paris-fr",
+      "sydney-au",
+      "wollongong-au",
+      "melbourne-au",
+      "canberra-au",
+      "phuket-th",
+      "krabi-th",
+      "dubai-ae",
+    ],
+  };
 
   const NAME_FIXES = {
     "United States of America": "United States",
@@ -319,7 +484,7 @@
   ];
 
   // —— State ——
-  /** @type {{ version: number, locationEnabled: boolean, visited: Record<string, { name: string, firstVisit: string, lastVisit: string, source: string, year?: number }> }} */
+  /** @type {{ version: number, locationEnabled: boolean, visited: Record<string, { name: string, firstVisit: string|null, lastVisit: string|null, source: string, year?: number }>, cities: Record<string, { name: string, country: string, admin: string|null, lat: number, lng: number, source: string, addedAt: string }> }} */
   let store = loadStore();
   /** @type {L.Map|null} */
   let map = null;
@@ -348,6 +513,10 @@
   let indiaStateLabelLayer = null;
   /** @type {L.LayerGroup|null} */
   let aeEmirateLabelLayer = null;
+  /** @type {L.LayerGroup|null} */
+  let cityLayer = null;
+  /** @type {Map<string, L.Marker>} */
+  const cityMarkers = new Map();
   /** @type {"loading"|"ready"|"failed"} */
   let countriesLoadState = "loading";
   /** @type {"loading"|"ready"|"failed"|"skipped"} */
@@ -386,6 +555,7 @@
     statInStates: $("stat-in-states"),
     statAuStates: $("stat-au-states"),
     statAeEmirates: $("stat-ae-emirates"),
+    statCities: $("stat-cities"),
     statPct: $("stat-pct"),
     visitedList: $("visited-list"),
     visitedEmpty: $("visited-empty"),
@@ -408,6 +578,7 @@
       version: 1,
       locationEnabled: false,
       visited: {},
+      cities: {},
     };
   }
 
@@ -438,6 +609,28 @@
     return visited;
   }
 
+  function normalizeCities(rawCities) {
+    if (!rawCities || typeof rawCities !== "object") return {};
+    const cities = {};
+    for (const [id, raw] of Object.entries(rawCities)) {
+      if (!raw || typeof raw !== "object") continue;
+      const known = CITY_INDEX.get(id);
+      const lat = Number(raw.lat != null ? raw.lat : known && known.lat);
+      const lng = Number(raw.lng != null ? raw.lng : known && known.lng);
+      const name = String(raw.name || (known && known.name) || "").trim();
+      if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      cities[id] = {
+        ...raw,
+        name,
+        country: raw.country || (known && known.country) || null,
+        admin: raw.admin || (known && known.admin) || null,
+        lat,
+        lng,
+      };
+    }
+    return cities;
+  }
+
   function loadStore() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -448,6 +641,7 @@
         ...defaultStore(),
         ...parsed,
         visited: normalizeVisited(parsed.visited),
+        cities: normalizeCities(parsed.cities),
       };
     } catch {
       return defaultStore();
@@ -456,6 +650,51 @@
 
   function saveStore() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  }
+
+  function cityRecord(c, source, now) {
+    return {
+      name: c.name,
+      country: c.country,
+      admin: c.admin || null,
+      lat: c.lat,
+      lng: c.lng,
+      addedAt: now,
+      source,
+    };
+  }
+
+  /**
+   * One-time MERGE of the user's known travel history into whatever is already
+   * saved on this origin. Existing entries (and their years) are never touched.
+   */
+  function applySeedOnce() {
+    try {
+      if (localStorage.getItem(SEED_FLAG_KEY)) return;
+    } catch {
+      return;
+    }
+    const now = new Date().toISOString();
+    let added = 0;
+    for (const [id, name] of SEED_VISITS.places) {
+      if (store.visited[id]) continue;
+      // No dates/years were supplied: leave them unset rather than "today".
+      store.visited[id] = { name, firstVisit: null, lastVisit: null, addedAt: now, source: "seed" };
+      added++;
+    }
+    for (const cityId of SEED_VISITS.cities) {
+      const c = CITY_INDEX.get(cityId);
+      if (!c || store.cities[cityId]) continue;
+      store.cities[cityId] = cityRecord(c, "seed", now);
+      added++;
+    }
+    try {
+      saveStore();
+      localStorage.setItem(SEED_FLAG_KEY, now);
+      console.info("MyTravels: travel history merged", added, "new entries");
+    } catch (e) {
+      console.warn("MyTravels: could not persist travel-history seed", e);
+    }
   }
 
   function visitedDisplayName(id, visit) {
@@ -698,7 +937,36 @@
     return visitedStateEntries().length;
   }
 
-  function formatCountPill(countries, usStates, inStates, auStates, aeEmirates) {
+  function visitedCityEntries() {
+    return Object.entries(store.cities || {});
+  }
+
+  function visitedCityCount() {
+    return visitedCityEntries().length;
+  }
+
+  function cityEntriesForCountry(countryId) {
+    return visitedCityEntries()
+      .filter(([, v]) => v.country === countryId)
+      .sort((a, b) => a[1].name.localeCompare(b[1].name));
+  }
+
+  function placeNameForId(id) {
+    if (!id) return "";
+    const f = featureById.get(id);
+    if (f) return featureName(f);
+    const v = store.visited[id];
+    return v && v.name ? v.name : "";
+  }
+
+  /** "Texas, United States" / "United Kingdom" */
+  function cityContextLabel(v) {
+    return [placeNameForId(v.admin), placeNameForId(v.country)]
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  function formatCountPill(countries, usStates, inStates, auStates, aeEmirates, cities = 0) {
     const parts = [
       countries === 1 ? "1 country" : `${countries} countries`,
     ];
@@ -720,6 +988,9 @@
         aeEmirates === 1 ? "1 UAE emirate" : `${aeEmirates} UAE emirates`
       );
     }
+    if (cities > 0) {
+      parts.push(cities === 1 ? "1 city" : `${cities} cities`);
+    }
     return parts.join(" · ");
   }
 
@@ -729,7 +1000,8 @@
       visitedUsStateCount(),
       visitedInStateCount(),
       visitedAuStateCount(),
-      visitedAeEmirateCount()
+      visitedAeEmirateCount(),
+      visitedCityCount()
     );
   }
 
@@ -791,6 +1063,7 @@
     refreshVisitLabels();
     refreshIndiaStateLabels();
     refreshAeEmirateLabels();
+    refreshCityMarkers();
     updateCountUI();
   }
 
@@ -805,9 +1078,11 @@
         name: name || id,
         firstVisit: now,
         lastVisit: now,
-        year: new Date().getFullYear(),
         source: source || "manual",
       };
+      // Only a live location fix implies "this year"; manual adds stay blank
+      // ("Year not set") until the user enters one.
+      if (source === "geo") store.visited[id].year = new Date().getFullYear();
       // Geo path shows its own toast; avoid double notifications
       if (source !== "geo") showToast(`Added ${name || id}`);
     }
@@ -821,6 +1096,55 @@
     saveStore();
     refreshLayerStyles();
     showToast(name ? `Removed ${name}` : "Removed");
+  }
+
+  function addCity(c, source = "manual") {
+    if (!c) return;
+    const now = new Date().toISOString();
+    const isNew = !store.cities[c.id];
+    if (isNew) store.cities[c.id] = cityRecord(c, source, now);
+    // A visited city implies its country (and mapped state / emirate).
+    for (const pid of [c.country, c.admin]) {
+      if (!pid || store.visited[pid] || !featureById.has(pid)) continue;
+      store.visited[pid] = {
+        name: featureName(featureById.get(pid)),
+        firstVisit: now,
+        lastVisit: now,
+        source,
+      };
+    }
+    saveStore();
+    refreshLayerStyles();
+    openStatsIfVisible();
+    showToast(isNew ? `Added ${c.name}` : `${c.name} is already on your list`);
+  }
+
+  function removeCity(id) {
+    const v = store.cities[id];
+    if (!v) return;
+    delete store.cities[id];
+    saveStore();
+    refreshLayerStyles();
+    openStatsIfVisible();
+    showToast(`Removed ${v.name}`);
+  }
+
+  function searchCities(q) {
+    const out = [];
+    for (const c of CITY_INDEX.values()) {
+      const n = c.name.toLowerCase();
+      if (!n.includes(q)) continue;
+      const score = n === q ? 100 : n.startsWith(q) ? 78 : 35 - Math.min(n.indexOf(q), 20);
+      out.push({
+        id: c.id,
+        name: c.name,
+        kind: "city",
+        score,
+        visited: !!store.cities[c.id],
+        city: c,
+      });
+    }
+    return out;
   }
 
   function findFeatureByName(query, { preferKind } = {}) {
@@ -887,6 +1211,7 @@
         }
       }
     }
+    for (const item of searchCities(q)) best.set(`city:${item.id}`, item);
     return [...best.values()]
       .sort(
         (a, b) =>
@@ -923,13 +1248,17 @@
     visitLabelLayer = L.layerGroup().addTo(map);
     indiaStateLabelLayer = L.layerGroup().addTo(map);
     aeEmirateLabelLayer = L.layerGroup().addTo(map);
-
+    cityLayer = L.layerGroup().addTo(map);
     map.on("zoomend moveend", () => {
       if (stateLayer) stateLayer.setStyle((f) => styleStateFeature(f));
       refreshVisitLabels();
       refreshIndiaStateLabels();
       refreshAeEmirateLabels();
     });
+    // City label collisions are measured in screen space, so only zoom
+    // changes need a rebuild (panning keeps open popups intact). Registered
+    // after the label handler so it sees the fresh country/state labels.
+    map.on("zoomend", refreshCityMarkers);
   }
 
   function loadScript(src) {
@@ -1401,9 +1730,47 @@
     if (!layer || typeof layer.getBounds !== "function") return null;
     try {
       const bounds = layer.getBounds();
-      return bounds && bounds.isValid() ? bounds.getCenter() : null;
+      if (!bounds || !bounds.isValid()) return null;
+      // Features crossing the antimeridian (USA via the Aleutians, Russia, Fiji…)
+      // have a bounds centre on the wrong side of the world. Use the centre of
+      // the largest polygon instead.
+      if (bounds.getEast() - bounds.getWest() > 180 && typeof layer.getLatLngs === "function") {
+        const largest = largestPolygonBounds(layer.getLatLngs());
+        if (largest) return largest.getCenter();
+      }
+      return bounds.getCenter();
     } catch {
       return null;
+    }
+  }
+
+  function largestPolygonBounds(latlngs) {
+    let best = null;
+    let bestArea = -1;
+    const visit = (arr) => {
+      if (!Array.isArray(arr) || !arr.length) return;
+      if (arr[0] && typeof arr[0].lat === "number") {
+        const b = L.latLngBounds(arr);
+        const area = (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth());
+        if (b.getEast() - b.getWest() <= 180 && area > bestArea) {
+          best = b;
+          bestArea = area;
+        }
+        return;
+      }
+      arr.forEach(visit);
+    };
+    visit(latlngs);
+    return best;
+  }
+
+  function featureBoundsArea(id) {
+    const layer = findPlaceLayer(id);
+    try {
+      const b = layer && layer.getBounds();
+      return b && b.isValid() ? (b.getEast() - b.getWest()) * (b.getNorth() - b.getSouth()) : 0;
+    } catch {
+      return 0;
     }
   }
 
@@ -1514,7 +1881,12 @@
     const indiaLabelsActive = indiaRegionInView();
     const uaeLabelsActive = uaeRegionInView();
 
-    for (const [id] of Object.entries(store.visited)) {
+    const placedCountryBoxes = [];
+    const ordered = Object.keys(store.visited)
+      .map((id) => ({ id, area: featureBoundsArea(id) }))
+      .sort((a, b) => b.area - a.area)
+      .map((x) => x.id);
+    for (const id of ordered) {
       const feature = featureById.get(id);
       if (!feature) continue;
       const kind = featureKind(feature);
@@ -1525,6 +1897,15 @@
 
       const center = visitLabelCenter(id);
       if (!center) continue;
+      if (kind === "country") {
+        // Small neighbours (Hong Kong / Macao) would otherwise print on top of
+        // each other at world zoom; the larger feature keeps its label.
+        const pt = map.latLngToContainerPoint(center);
+        const w = Math.min(180, featureName(feature).length * 7.2 + 4);
+        const box = { x1: pt.x - w / 2, y1: pt.y - 7, x2: pt.x + w / 2, y2: pt.y + 7 };
+        if (placedCountryBoxes.some((b) => boxesOverlap(box, b))) continue;
+        placedCountryBoxes.push(box);
+      }
       const label = escapeHtml(featureName(feature));
       const className =
         kind === "state"
@@ -1543,6 +1924,113 @@
         zIndexOffset: 1000,
       }).addTo(visitLabelLayer);
     }
+  }
+
+  function boxesOverlap(a, b) {
+    return !(a.x2 < b.x1 || a.x1 > b.x2 || a.y2 < b.y1 || a.y1 > b.y2);
+  }
+
+  function cityPopupContent(id) {
+    const v = store.cities[id];
+    const div = document.createElement("div");
+    div.className = "city-popup";
+    if (!v) return div;
+    const context = cityContextLabel(v);
+    div.innerHTML = `<strong class="city-popup-name">${escapeHtml(v.name)}</strong>${
+      context ? `<div class="city-popup-sub">${escapeHtml(context)}</div>` : ""
+    }`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "city-popup-remove";
+    btn.textContent = "Remove city";
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (map) map.closePopup();
+      removeCity(id);
+    });
+    div.appendChild(btn);
+    return div;
+  }
+
+  /** Visited cities: small dot + bold English name; colliding labels hide at low zoom. */
+  function refreshCityMarkers() {
+    if (!map || !cityLayer) return;
+    cityLayer.clearLayers();
+    cityMarkers.clear();
+    const entries = visitedCityEntries().filter(
+      ([, v]) => Number.isFinite(v.lat) && Number.isFinite(v.lng)
+    );
+    if (!entries.length) return;
+    const zoom = map.getZoom();
+    const placed = [];
+    if (zoom < CITY_LABEL_FULL_ZOOM) {
+      const container = map.getContainer();
+      const origin = container.getBoundingClientRect();
+      container
+        .querySelectorAll(".visited-label, .india-state-label, .ae-emirate-label")
+        .forEach((node) => {
+          const r = node.getBoundingClientRect();
+          if (!r.width) return;
+          placed.push({
+            x1: r.left - origin.left,
+            y1: r.top - origin.top,
+            x2: r.right - origin.left,
+            y2: r.bottom - origin.top,
+          });
+        });
+    }
+    for (const [id, v] of entries) {
+      const pt = map.latLngToContainerPoint([v.lat, v.lng]);
+      const w = Math.ceil(v.name.length * 6.8) + 8;
+      const candidates = {
+        right: { x1: pt.x + 6, y1: pt.y - 8, x2: pt.x + 6 + w, y2: pt.y + 8 },
+        left: { x1: pt.x - 6 - w, y1: pt.y - 8, x2: pt.x - 6, y2: pt.y + 8 },
+        top: { x1: pt.x - w / 2, y1: pt.y - 22, x2: pt.x + w / 2, y2: pt.y - 6 },
+        bottom: { x1: pt.x - w / 2, y1: pt.y + 6, x2: pt.x + w / 2, y2: pt.y + 22 },
+      };
+      let side = "right";
+      if (zoom < CITY_LABEL_FULL_ZOOM) {
+        side =
+          Object.keys(candidates).find(
+            (key) => !placed.some((b) => boxesOverlap(candidates[key], b))
+          ) || null;
+      }
+      if (side) placed.push(candidates[side]);
+      const label = side
+        ? `<span class="city-label city-label--${side}">${escapeHtml(v.name)}</span>`
+        : "";
+      const icon = L.divIcon({
+        className: "city-pin-icon",
+        html: `<span class="city-pin" data-city-id="${escapeHtml(id)}"><span class="city-dot"></span>${label}</span>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+      const marker = L.marker([v.lat, v.lng], {
+        icon,
+        keyboard: false,
+        title: v.name,
+        alt: v.name,
+        zIndexOffset: 1200,
+        riseOnHover: true,
+      });
+      marker.bindPopup(() => cityPopupContent(id), {
+        offset: [0, -4],
+        closeButton: true,
+        autoPanPadding: [24, 24],
+      });
+      marker.addTo(cityLayer);
+      cityMarkers.set(id, marker);
+    }
+  }
+
+  function focusCity(id) {
+    const v = store.cities[id];
+    if (!v || !map) return;
+    map.setView([v.lat, v.lng], Math.max(map.getZoom(), 8), { animate: false });
+    refreshCityMarkers();
+    const marker = cityMarkers.get(id);
+    if (marker) marker.openPopup();
   }
 
   function findPlaceLayer(id) {
@@ -1686,8 +2174,16 @@
       el.sheetMeta.innerHTML = `
         <div><dt>First visit</dt><dd>${formatDate(visit.firstVisit)}</dd></div>
         <div><dt>Last visit</dt><dd>${formatDate(visit.lastVisit)}</dd></div>
-        <div><dt>Added via</dt><dd>${visit.source === "geo" ? "Location" : "Manual"}</dd></div>
+        <div><dt>Added via</dt><dd>${
+          visit.source === "geo" ? "Location" : visit.source === "seed" ? "Imported history" : "Manual"
+        }</dd></div>
       `;
+      const cities = kind === "country" ? cityEntriesForCountry(id) : [];
+      if (cities.length) {
+        el.sheetMeta.innerHTML += `<div><dt>Cities</dt><dd>${escapeHtml(
+          cities.map(([, c]) => c.name).join(", ")
+        )}</dd></div>`;
+      }
       el.sheetRemove.hidden = false;
       el.sheetRemove.textContent = "Remove visit";
     } else {
@@ -1756,6 +2252,7 @@
     if (el.statInStates) el.statInStates.textContent = String(nIn);
     if (el.statAuStates) el.statAuStates.textContent = String(nAu);
     if (el.statAeEmirates) el.statAeEmirates.textContent = String(nAe);
+    if (el.statCities) el.statCities.textContent = String(visitedCityCount());
     el.statPct.textContent =
       nCountries === 0
         ? "0%"
@@ -1770,7 +2267,22 @@
     ];
     const entries = groups.flatMap((group) => group.entries);
     el.visitedList.innerHTML = "";
-    el.visitedEmpty.hidden = entries.length > 0;
+    el.visitedEmpty.hidden = entries.length > 0 || visitedCityCount() > 0;
+    const listedCityIds = new Set();
+    const appendCityRow = (cityId, c) => {
+      listedCityIds.add(cityId);
+      const li = document.createElement("li");
+      li.className = "visited-city";
+      const context = placeNameForId(c.admin) || "";
+      li.innerHTML = `<span class="name"><span class="city-bullet" aria-hidden="true"></span>${escapeHtml(
+        c.name
+      )} <span class="tag">City</span></span><span class="date">${escapeHtml(context)}</span>`;
+      li.addEventListener("click", () => {
+        closeStats();
+        focusCity(cityId);
+      });
+      el.visitedList.appendChild(li);
+    };
     for (const group of groups) {
       if (!group.entries.length) continue;
       const heading = document.createElement("li");
@@ -1791,7 +2303,20 @@
           fitPlace(id, isStateId(id) ? 6 : 5);
         });
         el.visitedList.appendChild(li);
+        if (group.title === "Countries") {
+          for (const [cityId, c] of cityEntriesForCountry(id)) appendCityRow(cityId, c);
+        }
       }
+    }
+    const orphanCities = visitedCityEntries()
+      .filter(([cityId]) => !listedCityIds.has(cityId))
+      .sort((a, b) => a[1].name.localeCompare(b[1].name));
+    if (orphanCities.length) {
+      const heading = document.createElement("li");
+      heading.className = "visited-group-heading";
+      heading.textContent = "Other cities";
+      el.visitedList.appendChild(heading);
+      for (const [cityId, c] of orphanCities) appendCityRow(cityId, c);
     }
     el.statsPanel.hidden = false;
   }
@@ -1822,6 +2347,15 @@
   // —— Search / autocomplete ——
   function pickPlaceFromSearch(item) {
     if (!item || !item.id) return;
+    if (item.kind === "city") {
+      addCity(item.city, "manual");
+      el.search.value = "";
+      el.searchClear.hidden = true;
+      el.autocomplete.hidden = true;
+      el.search.blur();
+      focusCity(item.id);
+      return;
+    }
     if (!store.visited[item.id]) {
       markVisited(item.id, item.name, "manual");
     }
@@ -1844,11 +2378,16 @@
       li.setAttribute("role", "option");
       li.dataset.id = item.id;
       let kindTag = "";
+      let label = item.name;
       if (item.kind === "state") {
         kindTag = `<span class="tag">${escapeHtml(stateRegionLabel(item.id))}</span>`;
+      } else if (item.kind === "city") {
+        kindTag = '<span class="tag">City</span>';
+        const country = placeNameForId(item.city.country);
+        if (country) label = `${item.name}, ${country}`;
       }
       const visitedTag = item.visited ? '<span class="tag">Visited</span>' : "";
-      li.innerHTML = `<span>${escapeHtml(item.name)}</span><span class="tags">${kindTag}${visitedTag}</span>`;
+      li.innerHTML = `<span>${escapeHtml(label)}</span><span class="tags">${kindTag}${visitedTag}</span>`;
       let picked = false;
       const onPick = (e) => {
         if (e.type === "pointerdown" && e.button != null && e.button !== 0) return;
@@ -2213,6 +2752,7 @@
           ...defaultStore(),
           ...data,
           visited: normalizeVisited(data.visited),
+          cities: normalizeCities(data.cities),
         };
         normalizeVisitedNames();
         saveStore();
@@ -2416,11 +2956,12 @@
     el.btnClear.addEventListener("click", () => {
       if (
         !confirm(
-          "Clear all visited countries, states, and emirates (US, India, Australia & UAE)? This cannot be undone."
+          "Clear all visited countries, states, emirates, and cities? This cannot be undone."
         )
       )
         return;
       store.visited = {};
+      store.cities = {};
       saveStore();
       refreshLayerStyles();
       showToast("All visits cleared");
@@ -2444,10 +2985,10 @@
 
     let reloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      // A single reload lets the newly activated v18 worker serve the fresh shell.
-      if (reloading || sessionStorage.getItem("mytravels.sw-reloaded-pages-v1")) return;
+      // A single reload lets the newly activated worker serve the fresh shell.
+      if (reloading || sessionStorage.getItem("mytravels.sw-reloaded-pages-v2")) return;
       reloading = true;
-      sessionStorage.setItem("mytravels.sw-reloaded-pages-v1", "1");
+      sessionStorage.setItem("mytravels.sw-reloaded-pages-v2", "1");
       window.location.reload();
     });
 
@@ -2461,6 +3002,7 @@
 
   // —— Boot ——
   async function boot() {
+    applySeedOnce();
     bindEvents();
     setLocUI(!!store.locationEnabled);
     updateCountUI();
@@ -2472,6 +3014,7 @@
       const fc = await loadCountries();
       addCountryLayer(fc);
       countriesLoadState = "ready";
+      refreshCityMarkers();
     } catch (err) {
       console.error(err);
       countriesLoadState = "failed";
@@ -2482,6 +3025,7 @@
       const sfc = await loadAllStates();
       addStateLayer(sfc);
       statesLoadState = "ready";
+      refreshCityMarkers();
     } catch (err) {
       console.warn("Admin-1 states failed to load", err);
       statesLoadState = "failed";

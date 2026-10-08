@@ -2,7 +2,7 @@
  * HTML/CSS/JS: network-first (updates always reach the device), cache fallback for offline.
  * Local GeoJSON, icons, manifest: cache-first.
  * All paths are relative to the SW location so it works under /<repo>/. */
-const CACHE = "mytravels-pages-v1";
+const CACHE = "mytravels-pages-v2";
 const SHELL = [
   "./",
   "./index.html",

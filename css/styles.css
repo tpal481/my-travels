@@ -393,6 +393,75 @@ html, body {
   font-weight: 750;
 }
 
+/* Visited city pins: small dot + bold English name */
+.city-pin-icon {
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  overflow: visible;
+}
+
+.city-pin {
+  position: relative;
+  display: block;
+  width: 0;
+  height: 0;
+  cursor: pointer;
+}
+
+.city-dot {
+  position: absolute;
+  left: -5px;
+  top: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #b91c1c;
+  border: 2px solid #fff;
+  box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.45);
+}
+
+.city-label {
+  position: absolute;
+  top: 0;
+  transform: translateY(-50%);
+  width: max-content;
+  color: #111827;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  text-shadow:
+    -1px -1px 0 rgba(255, 255, 255, 0.97),
+    1px -1px 0 rgba(255, 255, 255, 0.97),
+    -1px 1px 0 rgba(255, 255, 255, 0.97),
+    1px 1px 0 rgba(255, 255, 255, 0.97),
+    0 0 4px rgba(255, 255, 255, 0.95);
+}
+
+.city-label--right { left: 7px; }
+.city-label--left { right: 7px; }
+.city-label--top { left: 0; top: -14px; transform: translateX(-50%); }
+.city-label--bottom { left: 0; top: 6px; transform: translateX(-50%); }
+
+.city-popup { min-width: 140px; }
+.city-popup-name { font-size: 0.95rem; }
+.city-popup-sub { color: #6b7280; font-size: 0.78rem; margin-top: 2px; }
+.city-popup-remove {
+  margin-top: 8px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(185, 28, 28, 0.35);
+  background: #fff;
+  color: #b91c1c;
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
 /* Permanent admin-1 labels for India (all states) and UAE (all emirates). */
 .india-state-label,
 .ae-emirate-label {
@@ -724,6 +793,30 @@ html, body {
   }
 }
 
+/* 7 cards: countries, cities, 4 admin-1 counts, % of world */
+.stats-grid-7 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.stats-grid-7 .stat-card:last-child {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 560px) {
+  .stats-grid-7 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .stats-grid-7 .stat-card:last-child {
+    grid-column: auto;
+  }
+}
+
+@media (min-width: 900px) {
+  .stats-grid-7 {
+    grid-template-columns: repeat(7, 1fr);
+  }
+}
+
 @media (max-width: 360px) {
   .stats-grid-3 {
     grid-template-columns: 1fr 1fr;
@@ -798,6 +891,29 @@ html, body {
 .visited-list li.visited-group-heading:active { background: transparent; }
 
 .visited-list .name { font-weight: 600; font-size: 0.95rem; }
+
+/* Visited cities, nested under their country in the visited list */
+.visited-list li.visited-city {
+  padding: 9px 4px 9px 22px;
+}
+
+.visited-list li.visited-city .name {
+  font-weight: 600;
+  font-size: 0.86rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.city-bullet {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #b91c1c;
+  box-shadow: 0 0 0 1.5px #fff;
+  flex-shrink: 0;
+}
 .visited-list .date { font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
 
 .empty-hint {
