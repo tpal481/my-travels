@@ -444,7 +444,7 @@ html, body {
 
 .city-label--right { left: 7px; }
 .city-label--left { right: 7px; }
-.city-label--top { left: 0; top: -14px; transform: translateX(-50%); }
+.city-label--top { left: 0; top: -19px; transform: translateX(-50%); }
 .city-label--bottom { left: 0; top: 6px; transform: translateX(-50%); }
 
 .city-popup { min-width: 140px; }

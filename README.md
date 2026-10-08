@@ -2,11 +2,13 @@
 
 **Live app:** https://tpal481.github.io/my-travels/ (installable PWA — open on your phone and use *Add to Home screen*).
 
-## Cities & travel history (v19)
+## Cities & travel history (v19–v20)
 
 - **Cities**: visited cities show as small red dots with bold English labels (labels that would collide hide at low zoom and appear as you zoom in). Tap a pin to see / remove it. Cities are listed under their country in the count-pill list, and counted in stats.
 - Add cities from the search box — a small bundled list (~100 cities with coordinates, `CITY_DB` in `js/app.js`). Adding a city also marks its country (and US/AU/IN state or UAE emirate) visited. Stored in `localStorage` under `mytravels.v1` → `cities`.
 - **Travel-history seed**: on first load the app merges the user's known visits (9 countries, US-TX, AU-NSW/VIC/ACT, AE-DU, 12 cities) into existing data without removing anything, then sets `mytravels.seed.2026-10-08` so it never runs again.
+- **India seed** (separate flag `mytravels.seed.2026-10-08-india`, so it also applies where the first seed already ran): India + 14 states/UTs (IN-DL, AS, ML, TN, KA, RJ, UP, HR, WB, OR, CH, UT, HP, GA) + 22 cities. City search also matches aliases (Bengaluru/Bangalore, Prayagraj/Allahabad, Gurugram/Gurgaon, Delhi/New Delhi…).
+- City labels never overlap each other, other city dots, or country labels at any zoom; a city label may hide an Indian state / emirate label it would otherwise collide with.
 - Visit years may be blank ("Year not set"); manual adds no longer default to the current year (location fixes still do).
 
 ## Admin regions (v18)

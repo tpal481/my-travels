@@ -21,7 +21,7 @@
   // localized OSM labels) off the map; visited places are labeled by the app in English.
   const TILE_URL =
     "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}";
-  console.log("MyTravels v19 cities + travel-history seed");
+  console.log("MyTravels v20 india history + city label layout");
   const TILE_ATTR =
     'Tiles &copy; <a href="https://www.esri.com/">Esri</a>, HERE, Garmin, (c) <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>, and the GIS user community';
   const REVERSE_URL =
@@ -81,11 +81,13 @@
   const TOTAL_AE_EMIRATES = 7;
   // One-time merge of the user's travel history (old data lived on a dead origin).
   const SEED_FLAG_KEY = "mytravels.seed.2026-10-08";
-  // Below this zoom, city labels that would collide are hidden (dots stay).
-  const CITY_LABEL_FULL_ZOOM = 7;
+  // Second, independent one-time merge (India) — also runs on browsers that
+  // already applied the first seed.
+  const SEED_INDIA_FLAG_KEY = "mytravels.seed.2026-10-08-india";
 
   // —— Cities ——
-  // Small bundled gazetteer for city search / pins: [id, name, countryId, adminId|null, lat, lng].
+  // Small bundled gazetteer for city search / pins:
+  // [id, name, countryId, adminId|null, lat, lng, aliases?].
   // countryId / adminId match the feature ids used by the country & admin-1 layers.
   const CITY_DB = [
     // United States
@@ -144,16 +146,32 @@
     ["abu-dhabi-ae", "Abu Dhabi", "ARE", "AE-AZ", 24.4539, 54.3773],
     ["sharjah-ae", "Sharjah", "ARE", "AE-SH", 25.3463, 55.4209],
     // India
-    ["mumbai-in", "Mumbai", "IND", "IN-MH", 19.076, 72.8777],
-    ["pune-in", "Pune", "IND", "IN-MH", 18.5204, 73.8567],
-    ["new-delhi-in", "New Delhi", "IND", "IN-DL", 28.6139, 77.209],
-    ["bengaluru-in", "Bengaluru", "IND", "IN-KA", 12.9716, 77.5946],
-    ["chennai-in", "Chennai", "IND", "IN-TN", 13.0827, 80.2707],
-    ["kolkata-in", "Kolkata", "IND", "IN-WB", 22.5726, 88.3639],
+    ["new-delhi-in", "New Delhi", "IND", "IN-DL", 28.6139, 77.209, ["Delhi"]],
+    ["kolkata-in", "Kolkata", "IND", "IN-WB", 22.5726, 88.3639, ["Calcutta"]],
+    ["chennai-in", "Chennai", "IND", "IN-TN", 13.0827, 80.2707, ["Madras"]],
+    ["bengaluru-in", "Bangalore", "IND", "IN-KA", 12.9716, 77.5946, ["Bengaluru"]],
+    ["mumbai-in", "Mumbai", "IND", "IN-MH", 19.076, 72.8777, ["Bombay"]],
     ["hyderabad-in", "Hyderabad", "IND", "IN-TG", 17.385, 78.4867],
-    ["panaji-in", "Panaji", "IND", "IN-GA", 15.4909, 73.8278],
+    ["pune-in", "Pune", "IND", "IN-MH", 18.5204, 73.8567],
     ["jaipur-in", "Jaipur", "IND", "IN-RJ", 26.9124, 75.7873],
     ["agra-in", "Agra", "IND", "IN-UP", 27.1767, 78.0081],
+    ["allahabad-in", "Allahabad", "IND", "IN-UP", 25.4358, 81.8463, ["Prayagraj"]],
+    ["noida-in", "Noida", "IND", "IN-UP", 28.5355, 77.391],
+    ["gurgaon-in", "Gurgaon", "IND", "IN-HR", 28.4595, 77.0266, ["Gurugram"]],
+    ["manesar-in", "Manesar", "IND", "IN-HR", 28.3575, 76.9384],
+    ["guwahati-in", "Guwahati", "IND", "IN-AS", 26.1445, 91.7362],
+    ["sualkuchi-in", "Sualkuchi", "IND", "IN-AS", 26.17, 91.57, ["Sialkuchi"]],
+    ["kanyakumari-in", "Kanyakumari", "IND", "IN-TN", 8.0883, 77.5385, ["Cape Comorin"]],
+    ["darjeeling-in", "Darjeeling", "IND", "IN-WB", 27.041, 88.2663],
+    ["asansol-in", "Asansol", "IND", "IN-WB", 23.6739, 86.9524],
+    ["durgapur-in", "Durgapur", "IND", "IN-WB", 23.5204, 87.3119],
+    ["bhubaneswar-in", "Bhubaneswar", "IND", "IN-OR", 20.2961, 85.8245],
+    ["chandigarh-in", "Chandigarh", "IND", "IN-CH", 30.7333, 76.7794],
+    ["almora-in", "Almora", "IND", "IN-UT", 29.5971, 79.6591],
+    ["rishikesh-in", "Rishikesh", "IND", "IN-UT", 30.0869, 78.2676],
+    ["haridwar-in", "Haridwar", "IND", "IN-UT", 29.9457, 78.1642],
+    ["chamba-in", "Chamba", "IND", "IN-HP", 32.5534, 76.1258],
+    ["panaji-in", "Panaji", "IND", "IN-GA", 15.4909, 73.8278],
     ["kochi-in", "Kochi", "IND", "IN-KL", 9.9312, 76.2673],
     // Rest of Asia / Middle East
     ["tokyo-jp", "Tokyo", "JPN", null, 35.6762, 139.6503],
@@ -205,9 +223,9 @@
   ];
 
   const CITY_INDEX = new Map(
-    CITY_DB.map(([id, name, country, admin, lat, lng]) => [
+    CITY_DB.map(([id, name, country, admin, lat, lng, aliases]) => [
       id,
-      { id, name, country, admin, lat, lng },
+      { id, name, country, admin, lat, lng, aliases: aliases || [] },
     ])
   );
 
@@ -242,6 +260,52 @@
       "phuket-th",
       "krabi-th",
       "dubai-ae",
+    ],
+  };
+
+  // India travel history (years unknown → left blank).
+  const SEED_VISITS_INDIA = {
+    places: [
+      ["IND", "India"],
+      ["IN-DL", "Delhi"],
+      ["IN-AS", "Assam"],
+      ["IN-ML", "Meghalaya"],
+      ["IN-TN", "Tamil Nadu"],
+      ["IN-KA", "Karnataka"],
+      ["IN-RJ", "Rajasthan"],
+      ["IN-UP", "Uttar Pradesh"],
+      ["IN-HR", "Haryana"],
+      ["IN-WB", "West Bengal"],
+      ["IN-OR", "Odisha"],
+      ["IN-CH", "Chandigarh"],
+      ["IN-UT", "Uttarakhand"],
+      ["IN-HP", "Himachal Pradesh"],
+      ["IN-GA", "Goa"],
+    ],
+    // Order = label priority when pins crowd together.
+    cities: [
+      "new-delhi-in",
+      "kolkata-in",
+      "chennai-in",
+      "bengaluru-in",
+      "jaipur-in",
+      "guwahati-in",
+      "bhubaneswar-in",
+      "chandigarh-in",
+      "agra-in",
+      "allahabad-in",
+      "darjeeling-in",
+      "kanyakumari-in",
+      "haridwar-in",
+      "rishikesh-in",
+      "almora-in",
+      "chamba-in",
+      "asansol-in",
+      "durgapur-in",
+      "gurgaon-in",
+      "noida-in",
+      "manesar-in",
+      "sualkuchi-in",
     ],
   };
 
@@ -668,21 +732,21 @@
    * One-time MERGE of the user's known travel history into whatever is already
    * saved on this origin. Existing entries (and their years) are never touched.
    */
-  function applySeedOnce() {
+  function applySeedOnce(flagKey = SEED_FLAG_KEY, seed = SEED_VISITS) {
     try {
-      if (localStorage.getItem(SEED_FLAG_KEY)) return;
+      if (localStorage.getItem(flagKey)) return;
     } catch {
       return;
     }
     const now = new Date().toISOString();
     let added = 0;
-    for (const [id, name] of SEED_VISITS.places) {
+    for (const [id, name] of seed.places) {
       if (store.visited[id]) continue;
       // No dates/years were supplied: leave them unset rather than "today".
       store.visited[id] = { name, firstVisit: null, lastVisit: null, addedAt: now, source: "seed" };
       added++;
     }
-    for (const cityId of SEED_VISITS.cities) {
+    for (const cityId of seed.cities) {
       const c = CITY_INDEX.get(cityId);
       if (!c || store.cities[cityId]) continue;
       store.cities[cityId] = cityRecord(c, "seed", now);
@@ -690,8 +754,8 @@
     }
     try {
       saveStore();
-      localStorage.setItem(SEED_FLAG_KEY, now);
-      console.info("MyTravels: travel history merged", added, "new entries");
+      localStorage.setItem(flagKey, now);
+      console.info("MyTravels: travel history merged", flagKey, added, "new entries");
     } catch (e) {
       console.warn("MyTravels: could not persist travel-history seed", e);
     }
@@ -1132,14 +1196,20 @@
   function searchCities(q) {
     const out = [];
     for (const c of CITY_INDEX.values()) {
-      const n = c.name.toLowerCase();
-      if (!n.includes(q)) continue;
-      const score = n === q ? 100 : n.startsWith(q) ? 78 : 35 - Math.min(n.indexOf(q), 20);
+      let best = null;
+      for (const term of [c.name, ...(c.aliases || [])]) {
+        const n = term.toLowerCase();
+        if (!n.includes(q)) continue;
+        const score = n === q ? 100 : n.startsWith(q) ? 78 : 35 - Math.min(n.indexOf(q), 20);
+        if (!best || score > best.score) best = { score, term };
+      }
+      if (!best) continue;
       out.push({
         id: c.id,
         name: c.name,
         kind: "city",
-        score,
+        score: best.score,
+        matchedAlias: best.term !== c.name ? best.term : null,
         visited: !!store.cities[c.id],
         city: c,
       });
@@ -1255,10 +1325,9 @@
       refreshIndiaStateLabels();
       refreshAeEmirateLabels();
     });
-    // City label collisions are measured in screen space, so only zoom
-    // changes need a rebuild (panning keeps open popups intact). Registered
-    // after the label handler so it sees the fresh country/state labels.
-    map.on("zoomend", refreshCityMarkers);
+    // Registered after the label handler so city layout sees the fresh
+    // country/state labels (admin-1 labels are rebuilt on every move).
+    map.on("zoomend moveend", refreshCityMarkers);
   }
 
   function loadScript(src) {
@@ -1813,7 +1882,7 @@
     const className = visited ? `${classBase} ${classBase}--visited` : classBase;
     const icon = L.divIcon({
       className: "visited-label-icon",
-      html: `<span class="${className}">${escapeHtml(labelText)}</span>`,
+      html: `<span class="${className}" data-place-id="${escapeHtml(id)}">${escapeHtml(labelText)}</span>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     });
@@ -1913,7 +1982,7 @@
           : "visited-label visited-label--country";
       const icon = L.divIcon({
         className: "visited-label-icon",
-        html: `<span class="${className}">${label}</span>`,
+        html: `<span class="${className}" data-place-id="${escapeHtml(id)}">${label}</span>`,
         iconSize: [0, 0],
         iconAnchor: [0, 0],
       });
@@ -1953,82 +2022,155 @@
     return div;
   }
 
-  /** Visited cities: small dot + bold English name; colliding labels hide at low zoom. */
+  function rectRelativeTo(node, origin) {
+    const r = node.getBoundingClientRect();
+    if (!r.width && !r.height) return null;
+    return {
+      x1: r.left - origin.left,
+      y1: r.top - origin.top,
+      x2: r.right - origin.left,
+      y2: r.bottom - origin.top,
+    };
+  }
+
+  let labelMeasureCtx = null;
+  const labelWidthCache = new Map();
+  /** Rendered width of a city label (0.68rem / 800, plus the white halo). */
+  function cityLabelWidth(name) {
+    if (labelWidthCache.has(name)) return labelWidthCache.get(name);
+    let w = Math.ceil(name.length * 7.4) + 6;
+    try {
+      if (!labelMeasureCtx) labelMeasureCtx = document.createElement("canvas").getContext("2d");
+      const rootPx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      const family = getComputedStyle(document.body).fontFamily || "sans-serif";
+      labelMeasureCtx.font = `800 ${(0.68 * rootPx).toFixed(2)}px ${family}`;
+      w = Math.ceil(labelMeasureCtx.measureText(name).width * 1.04) + 6;
+    } catch {
+      /* keep estimate */
+    }
+    labelWidthCache.set(name, w);
+    return w;
+  }
+
+  function cityIcon(id, name, side) {
+    const label = side
+      ? `<span class="city-label city-label--${side}">${escapeHtml(name)}</span>`
+      : "";
+    return L.divIcon({
+      className: "city-pin-icon",
+      html: `<span class="city-pin" data-city-id="${escapeHtml(id)}"><span class="city-dot"></span>${label}</span>`,
+      iconSize: [0, 0],
+      iconAnchor: [0, 0],
+    });
+  }
+
+  /**
+   * Visited cities: small dot + bold English name.
+   * Label layout (screen space, every zoom):
+   *  - never overlaps another city label, another city's dot, or a country label;
+   *  - prefers a spot clear of state/emirate labels; failing that it may cover
+   *    (and hide) only the label of the city's own state/emirate;
+   *  - otherwise the label is hidden (dot stays) until you zoom in.
+   * Markers are reused (setIcon) so an open city popup survives pans and zooms.
+   */
   function refreshCityMarkers() {
     if (!map || !cityLayer) return;
-    cityLayer.clearLayers();
-    cityMarkers.clear();
     const entries = visitedCityEntries().filter(
       ([, v]) => Number.isFinite(v.lat) && Number.isFinite(v.lng)
     );
-    if (!entries.length) return;
-    const zoom = map.getZoom();
-    const placed = [];
-    if (zoom < CITY_LABEL_FULL_ZOOM) {
-      const container = map.getContainer();
-      const origin = container.getBoundingClientRect();
-      container
-        .querySelectorAll(".visited-label, .india-state-label, .ae-emirate-label")
-        .forEach((node) => {
-          const r = node.getBoundingClientRect();
-          if (!r.width) return;
-          placed.push({
-            x1: r.left - origin.left,
-            y1: r.top - origin.top,
-            x2: r.right - origin.left,
-            y2: r.bottom - origin.top,
-          });
-        });
+    for (const [id, marker] of cityMarkers) {
+      if (!store.cities[id]) {
+        cityLayer.removeLayer(marker);
+        cityMarkers.delete(id);
+      }
     }
-    for (const [id, v] of entries) {
+    if (!entries.length) return;
+
+    const container = map.getContainer();
+    const origin = container.getBoundingClientRect();
+    const hard = [];
+    container.querySelectorAll(".visited-label--country").forEach((node) => {
+      const r = rectRelativeTo(node, origin);
+      if (r) hard.push(r);
+    });
+    const soft = [];
+    container
+      .querySelectorAll(".visited-label--state, .india-state-label, .ae-emirate-label")
+      .forEach((node) => {
+        node.style.visibility = "";
+        const r = rectRelativeTo(node, origin);
+        if (r) soft.push({ ...r, node, placeId: node.getAttribute("data-place-id") });
+      });
+    const dots = entries.map(([id, v]) => {
       const pt = map.latLngToContainerPoint([v.lat, v.lng]);
-      const w = Math.ceil(v.name.length * 6.8) + 8;
+      return { id, pt, box: { x1: pt.x - 6, y1: pt.y - 6, x2: pt.x + 6, y2: pt.y + 6 } };
+    });
+    const hiddenSoft = new Set();
+
+    entries.forEach(([id, v], i) => {
+      const { pt } = dots[i];
+      const w = cityLabelWidth(v.name);
       const candidates = {
         right: { x1: pt.x + 6, y1: pt.y - 8, x2: pt.x + 6 + w, y2: pt.y + 8 },
         left: { x1: pt.x - 6 - w, y1: pt.y - 8, x2: pt.x - 6, y2: pt.y + 8 },
         top: { x1: pt.x - w / 2, y1: pt.y - 22, x2: pt.x + w / 2, y2: pt.y - 6 },
         bottom: { x1: pt.x - w / 2, y1: pt.y + 6, x2: pt.x + w / 2, y2: pt.y + 22 },
       };
-      let side = "right";
-      if (zoom < CITY_LABEL_FULL_ZOOM) {
-        side =
-          Object.keys(candidates).find(
-            (key) => !placed.some((b) => boxesOverlap(candidates[key], b))
-          ) || null;
+      const blockedHard = (box) =>
+        hard.some((b) => boxesOverlap(box, b)) ||
+        dots.some((d, j) => j !== i && boxesOverlap(box, d.box));
+      const blockedSoft = (box, allowOwnState) =>
+        soft.some(
+          (b) =>
+            !hiddenSoft.has(b.node) &&
+            !(allowOwnState && b.placeId && b.placeId === v.admin) &&
+            boxesOverlap(box, b)
+        );
+      const keys = Object.keys(candidates);
+      const free = (k, allowOwn) => !blockedHard(candidates[k]) && !blockedSoft(candidates[k], allowOwn);
+      // 1) clear of every label; 2) may cover only its own state's label.
+      const side = keys.find((k) => free(k, false)) || keys.find((k) => free(k, true)) || null;
+      if (side) {
+        const box = candidates[side];
+        hard.push(box);
+        for (const b of soft) if (boxesOverlap(box, b)) hiddenSoft.add(b.node);
       }
-      if (side) placed.push(candidates[side]);
-      const label = side
-        ? `<span class="city-label city-label--${side}">${escapeHtml(v.name)}</span>`
-        : "";
-      const icon = L.divIcon({
-        className: "city-pin-icon",
-        html: `<span class="city-pin" data-city-id="${escapeHtml(id)}"><span class="city-dot"></span>${label}</span>`,
-        iconSize: [0, 0],
-        iconAnchor: [0, 0],
-      });
-      const marker = L.marker([v.lat, v.lng], {
-        icon,
-        keyboard: false,
-        title: v.name,
-        alt: v.name,
-        zIndexOffset: 1200,
-        riseOnHover: true,
-      });
-      marker.bindPopup(() => cityPopupContent(id), {
-        offset: [0, -4],
-        closeButton: true,
-        autoPanPadding: [24, 24],
-      });
-      marker.addTo(cityLayer);
-      cityMarkers.set(id, marker);
+      const icon = cityIcon(id, v.name, side);
+      let marker = cityMarkers.get(id);
+      if (marker) {
+        marker.setLatLng([v.lat, v.lng]);
+        marker.setIcon(icon);
+      } else {
+        marker = L.marker([v.lat, v.lng], {
+          icon,
+          keyboard: false,
+          title: v.name,
+          alt: v.name,
+          zIndexOffset: 1200,
+          riseOnHover: true,
+        });
+        marker.bindPopup(() => cityPopupContent(id), {
+          offset: [0, -4],
+          closeButton: true,
+          autoPanPadding: [24, 24],
+        });
+        marker.addTo(cityLayer);
+        cityMarkers.set(id, marker);
+      }
+    });
+    // A city dot also outranks an admin-1 label drawn straight over it.
+    for (const b of soft) {
+      if (dots.some((d) => boxesOverlap(d.box, b))) hiddenSoft.add(b.node);
     }
+    hiddenSoft.forEach((node) => {
+      node.style.visibility = "hidden";
+    });
   }
 
   function focusCity(id) {
     const v = store.cities[id];
     if (!v || !map) return;
     map.setView([v.lat, v.lng], Math.max(map.getZoom(), 8), { animate: false });
-    refreshCityMarkers();
     const marker = cityMarkers.get(id);
     if (marker) marker.openPopup();
   }
@@ -2384,7 +2526,8 @@
       } else if (item.kind === "city") {
         kindTag = '<span class="tag">City</span>';
         const country = placeNameForId(item.city.country);
-        if (country) label = `${item.name}, ${country}`;
+        const shown = item.matchedAlias ? `${item.name} (${item.matchedAlias})` : item.name;
+        label = country ? `${shown}, ${country}` : shown;
       }
       const visitedTag = item.visited ? '<span class="tag">Visited</span>' : "";
       li.innerHTML = `<span>${escapeHtml(label)}</span><span class="tags">${kindTag}${visitedTag}</span>`;
@@ -2986,9 +3129,9 @@
     let reloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       // A single reload lets the newly activated worker serve the fresh shell.
-      if (reloading || sessionStorage.getItem("mytravels.sw-reloaded-pages-v2")) return;
+      if (reloading || sessionStorage.getItem("mytravels.sw-reloaded-pages-v3")) return;
       reloading = true;
-      sessionStorage.setItem("mytravels.sw-reloaded-pages-v2", "1");
+      sessionStorage.setItem("mytravels.sw-reloaded-pages-v3", "1");
       window.location.reload();
     });
 
@@ -3002,7 +3145,8 @@
 
   // —— Boot ——
   async function boot() {
-    applySeedOnce();
+    applySeedOnce(SEED_FLAG_KEY, SEED_VISITS);
+    applySeedOnce(SEED_INDIA_FLAG_KEY, SEED_VISITS_INDIA);
     bindEvents();
     setLocUI(!!store.locationEnabled);
     updateCountUI();
